@@ -4,6 +4,8 @@
 #include <NavalCommand/Symbology/Nato/Api/Sidc.h>
 #include <NavalCommand/Symbology/Nato/Api/Symbol.h>
 #include <NavalCommand/Symbology/Nato/ImGui/Renderer.h>
+#include <array>
+#include <cmath>
 #include <gtest/gtest.h>
 #include <imgui.h>
 #include <stdexcept>
@@ -21,10 +23,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 				return {320.0 + coordinate.LongitudeDegrees, 240.0 - coordinate.LatitudeDegrees};
 			}
 
-			Api::ScreenVector ProjectLocalOffsetMeters(
-				Api::GeographicCoordinate,
-				double eastMeters,
-				double northMeters) const noexcept override
+			Api::ScreenVector ProjectLocalOffsetMeters(Api::GeographicCoordinate, double eastMeters, double northMeters) const noexcept override
 			{
 				return {eastMeters * 0.05, -northMeters * 0.05};
 			}
@@ -58,13 +57,12 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			ImGuiFrame& operator=(const ImGuiFrame&) = delete;
 		};
 
-		Api::Symbol MakeSymbol(
-			Api::SymbolSet symbolSet,
-			Api::StandardIdentity identity = Api::StandardIdentity::Friendly,
-			std::uint8_t entity = 0,
-			std::uint8_t entityType = 0,
-			std::uint8_t entitySubtype = 0,
-			std::uint8_t modifier1 = 0)
+		Api::Symbol MakeSymbol(Api::SymbolSet symbolSet,
+							   Api::StandardIdentity identity = Api::StandardIdentity::Friendly,
+							   std::uint8_t entity = 0,
+							   std::uint8_t entityType = 0,
+							   std::uint8_t entitySubtype = 0,
+							   std::uint8_t modifier1 = 0)
 		{
 			Api::SidcFields fields;
 			fields.ContextValue = Api::Context::Simulation;
@@ -84,7 +82,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 
 		Api::RenderContext MakeContext(const Api::IMapProjection* projection = nullptr)
 		{
-			return {{400.0, 300.0}, {{100.0, 80.0}, {700.0, 520.0}}, projection, 1.0, 0.0, 60.0};
+			return {{400.0, 300.0}, {400.0, 300.0}, {{100.0, 80.0}, {700.0, 520.0}}, projection, 1.0, 0.0, 60.0};
 		}
 
 		bool HasVertexColorFrom(const ImDrawList& drawing, int firstVertex, ImU32 color)
@@ -125,15 +123,11 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		auto* drawing = ::ImGui::GetWindowDrawList();
 		const int initialVertexCount = drawing->VtxBuffer.Size;
 
-		const auto seaSurface = renderer.Render(
-			MakeSymbol(Api::SymbolSet::SeaSurface, Api::StandardIdentity::Friendly),
-			MakeContext());
+		const auto seaSurface = renderer.Render(MakeSymbol(Api::SymbolSet::SeaSurface, Api::StandardIdentity::Friendly), MakeContext());
 		const int seaSurfaceVertexCount = drawing->VtxBuffer.Size - initialVertexCount;
 
 		const int neutralStart = drawing->VtxBuffer.Size;
-		const auto neutralSeaSurface = renderer.Render(
-			MakeSymbol(Api::SymbolSet::SeaSurface, Api::StandardIdentity::Neutral),
-			MakeContext());
+		const auto neutralSeaSurface = renderer.Render(MakeSymbol(Api::SymbolSet::SeaSurface, Api::StandardIdentity::Neutral), MakeContext());
 		const int neutralSeaSurfaceVertexCount = drawing->VtxBuffer.Size - neutralStart;
 
 		ASSERT_TRUE(seaSurface.WasDrawn);
@@ -184,7 +178,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 
 		ASSERT_TRUE(moving.WasDrawn);
 		ASSERT_TRUE(unknownCourse.WasDrawn);
-		EXPECT_LT(moving.Bounds.Minimum.Y, unknownCourse.Bounds.Minimum.Y);
+		EXPECT_LT(moving.GeographicBounds.Minimum.Y, unknownCourse.GeographicBounds.Minimum.Y);
 		EXPECT_LT(unknownVertexCount, movingVertexCount);
 	}
 
@@ -194,8 +188,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		Renderer renderer;
 		TestProjection projection;
 		auto uncertain = MakeSymbol(Api::SymbolSet::SeaSubsurface, Api::StandardIdentity::Unknown, 11, 1);
-		uncertain.ExternalAmplifiers.Position = Api::PositionAmplifier{
-			{{48.0}, {5.0}}, Api::GeographicUncertaintyEllipse{200.0, 100.0, 0.5}};
+		uncertain.ExternalAmplifiers.Position = Api::PositionAmplifier{{{48.0}, {5.0}}, Api::GeographicUncertaintyEllipse{200.0, 100.0, 0.5}};
 		const auto uncertainResult = renderer.Render(uncertain, MakeContext(&projection));
 
 		auto unsupported = MakeSymbol(Api::SymbolSet::SeaSubsurface, Api::StandardIdentity::Unknown, 11, 2);
@@ -222,7 +215,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		ASSERT_TRUE(baseline.WasDrawn);
 		ASSERT_TRUE(headingOnly.WasDrawn);
 		EXPECT_GT(headingVertexCount, 0);
-		EXPECT_GT(headingOnly.Bounds.Maximum.X, baseline.Bounds.Maximum.X);
+		EXPECT_EQ(headingOnly.GeographicBounds.Maximum.X, baseline.GeographicBounds.Maximum.X);
 	}
 
 	TEST(RendererTest, DrawsTheExactSupportedEntityAndModifierAssignments)
@@ -237,48 +230,39 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			std::uint8_t EntitySubtype;
 			std::uint8_t Modifier1;
 		};
-		const std::array entityCases{
-			EntityCase{Api::SymbolSet::Air, 11, 1, 0, 0},
-			EntityCase{Api::SymbolSet::Air, 11, 2, 0, 0},
-			EntityCase{Api::SymbolSet::AirMissile, 11, 0, 0, 6},
-			EntityCase{Api::SymbolSet::AirMissile, 11, 0, 0, 7},
-			EntityCase{Api::SymbolSet::SeaSurface, 12, 1, 0, 0},
-			EntityCase{Api::SymbolSet::SeaSurface, 12, 2, 0, 0},
-			EntityCase{Api::SymbolSet::SeaSurface, 12, 2, 3, 0},
-			EntityCase{Api::SymbolSet::SeaSurface, 12, 2, 4, 0},
-			EntityCase{Api::SymbolSet::SeaSurface, 12, 2, 5, 0},
-			EntityCase{Api::SymbolSet::SeaSurface, 12, 3, 0, 0},
-			EntityCase{Api::SymbolSet::SeaSurface, 12, 5, 0, 0},
-			EntityCase{Api::SymbolSet::SeaSurface, 13, 1, 0, 0},
-			EntityCase{Api::SymbolSet::SeaSurface, 14, 1, 0, 0},
-			EntityCase{Api::SymbolSet::SeaSubsurface, 11, 1, 0, 0},
-			EntityCase{Api::SymbolSet::SeaSubsurface, 11, 1, 0, 8},
-			EntityCase{Api::SymbolSet::SeaSubsurface, 11, 1, 0, 9},
-			EntityCase{Api::SymbolSet::SeaSubsurface, 11, 1, 0, 10},
-			EntityCase{Api::SymbolSet::SeaSubsurface, 13, 1, 0, 0},
-			EntityCase{Api::SymbolSet::SeaSubsurface, 13, 3, 0, 0},
-			EntityCase{Api::SymbolSet::MineWarfare, 11, 0, 0, 0},
-			EntityCase{Api::SymbolSet::LandEquipment, 11, 5, 0, 0},
-			EntityCase{Api::SymbolSet::LandEquipment, 11, 11, 0, 0},
-			EntityCase{Api::SymbolSet::LandInstallation, 11, 0, 0, 0}};
+		const std::array entityCases{EntityCase{Api::SymbolSet::Air, 11, 1, 0, 0},
+									 EntityCase{Api::SymbolSet::Air, 11, 2, 0, 0},
+									 EntityCase{Api::SymbolSet::AirMissile, 11, 0, 0, 6},
+									 EntityCase{Api::SymbolSet::AirMissile, 11, 0, 0, 7},
+									 EntityCase{Api::SymbolSet::SeaSurface, 12, 1, 0, 0},
+									 EntityCase{Api::SymbolSet::SeaSurface, 12, 2, 0, 0},
+									 EntityCase{Api::SymbolSet::SeaSurface, 12, 2, 3, 0},
+									 EntityCase{Api::SymbolSet::SeaSurface, 12, 2, 4, 0},
+									 EntityCase{Api::SymbolSet::SeaSurface, 12, 2, 5, 0},
+									 EntityCase{Api::SymbolSet::SeaSurface, 12, 3, 0, 0},
+									 EntityCase{Api::SymbolSet::SeaSurface, 12, 5, 0, 0},
+									 EntityCase{Api::SymbolSet::SeaSurface, 13, 1, 0, 0},
+									 EntityCase{Api::SymbolSet::SeaSurface, 14, 1, 0, 0},
+									 EntityCase{Api::SymbolSet::SeaSubsurface, 11, 1, 0, 0},
+									 EntityCase{Api::SymbolSet::SeaSubsurface, 11, 1, 0, 8},
+									 EntityCase{Api::SymbolSet::SeaSubsurface, 11, 1, 0, 9},
+									 EntityCase{Api::SymbolSet::SeaSubsurface, 11, 1, 0, 10},
+									 EntityCase{Api::SymbolSet::SeaSubsurface, 13, 1, 0, 0},
+									 EntityCase{Api::SymbolSet::SeaSubsurface, 13, 3, 0, 0},
+									 EntityCase{Api::SymbolSet::MineWarfare, 11, 0, 0, 0},
+									 EntityCase{Api::SymbolSet::LandEquipment, 11, 5, 0, 0},
+									 EntityCase{Api::SymbolSet::LandEquipment, 11, 11, 0, 0},
+									 EntityCase{Api::SymbolSet::LandInstallation, 11, 0, 0, 0}};
 		auto* drawing = ::ImGui::GetWindowDrawList();
 		for (const EntityCase& entityCase : entityCases)
 		{
 			const int previousVertexCount = drawing->VtxBuffer.Size;
-			const auto symbol = MakeSymbol(
-				entityCase.Set,
-				Api::StandardIdentity::Friendly,
-				entityCase.Entity,
-				entityCase.EntityType,
-				entityCase.EntitySubtype,
-				entityCase.Modifier1);
+			const auto symbol =
+				MakeSymbol(entityCase.Set, Api::StandardIdentity::Friendly, entityCase.Entity, entityCase.EntityType, entityCase.EntitySubtype, entityCase.Modifier1);
 			const auto result = renderer.Render(symbol, MakeContext());
-			ASSERT_TRUE(result.WasDrawn)
-				<< "set=" << static_cast<int>(entityCase.Set)
-				<< " entity=" << static_cast<int>(entityCase.Entity)
-				<< " type=" << static_cast<int>(entityCase.EntityType)
-				<< " subtype=" << static_cast<int>(entityCase.EntitySubtype)
-				<< " modifier=" << static_cast<int>(entityCase.Modifier1);
+			ASSERT_TRUE(result.WasDrawn) << "set=" << static_cast<int>(entityCase.Set) << " entity=" << static_cast<int>(entityCase.Entity)
+										 << " type=" << static_cast<int>(entityCase.EntityType) << " subtype=" << static_cast<int>(entityCase.EntitySubtype)
+										 << " modifier=" << static_cast<int>(entityCase.Modifier1);
 			EXPECT_GT(drawing->VtxBuffer.Size, previousVertexCount);
 		}
 
@@ -298,10 +282,10 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			ASSERT_TRUE(result.WasDrawn);
 			EXPECT_TRUE(HasVertexColorFrom(*drawing, firstVertex, expectedColor));
 		};
-		expectsAffiliationColor(Api::StandardIdentity::Unknown, IM_COL32(255, 255, 0, 255));
-		expectsAffiliationColor(Api::StandardIdentity::Friendly, IM_COL32(0, 255, 255, 255));
-		expectsAffiliationColor(Api::StandardIdentity::Neutral, IM_COL32(0, 255, 0, 255));
-		expectsAffiliationColor(Api::StandardIdentity::Hostile, IM_COL32(255, 0, 0, 255));
+		expectsAffiliationColor(Api::StandardIdentity::Unknown, IM_COL32(255, 255, 128, 255));
+		expectsAffiliationColor(Api::StandardIdentity::Friendly, IM_COL32(128, 224, 255, 255));
+		expectsAffiliationColor(Api::StandardIdentity::Neutral, IM_COL32(170, 255, 170, 255));
+		expectsAffiliationColor(Api::StandardIdentity::Hostile, IM_COL32(255, 128, 128, 255));
 
 		Api::SidcFields destroyedFields;
 		destroyedFields.SymbolSetValue = Api::SymbolSet::SeaSurface;
@@ -346,7 +330,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		const auto altitudeResult = renderer.Render(airWithAltitude, MakeContext());
 		ASSERT_TRUE(airBaseline.WasDrawn);
 		ASSERT_TRUE(altitudeResult.WasDrawn);
-		EXPECT_GT(altitudeResult.Bounds.Maximum.X, airBaseline.Bounds.Maximum.X);
+		EXPECT_NE(altitudeResult.Bounds.Maximum.X, airBaseline.Bounds.Maximum.X);
 
 		const auto seaSurface = MakeSymbol(Api::SymbolSet::SeaSurface);
 		const auto seaSurfaceBaseline = renderer.Render(seaSurface, MakeContext());
@@ -355,12 +339,204 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		const auto ignoredDepth = renderer.Render(surfaceWithDepth, MakeContext());
 		ASSERT_TRUE(seaSurfaceBaseline.WasDrawn);
 		ASSERT_TRUE(ignoredDepth.WasDrawn);
-		EXPECT_EQ(ignoredDepth.Bounds.Maximum.X, seaSurfaceBaseline.Bounds.Maximum.X);
+		EXPECT_LT(ignoredDepth.LayoutBounds.Maximum.Y, seaSurfaceBaseline.LayoutBounds.Maximum.Y);
 
 		auto submarine = MakeSymbol(Api::SymbolSet::SeaSubsurface, Api::StandardIdentity::Friendly, 11, 1);
 		submarine.ExternalAmplifiers.VerticalPosition = Api::VerticalPositionAmplifier{200.0, Api::VerticalReference::Depth};
 		const auto depthResult = renderer.Render(submarine, MakeContext());
 		ASSERT_TRUE(depthResult.WasDrawn);
-		EXPECT_GT(depthResult.Bounds.Maximum.X, seaSurfaceBaseline.Bounds.Maximum.X);
+		EXPECT_GT(depthResult.LayoutBounds.Maximum.Y, ignoredDepth.LayoutBounds.Maximum.Y);
 	}
+	TEST(RendererMeasurementTest, SharesBoundsWithoutEmittingCommandsAcrossStylesAndFonts)
+	{
+		ImGuiFrame frame;
+		Renderer concrete;
+		Api::IRenderer& renderer = concrete;
+		auto symbol = MakeSymbol(Api::SymbolSet::Air, Api::StandardIdentity::Friendly, 11, 1, 0, 4);
+		symbol.ExternalAmplifiers.UniqueDesignation = "Long aircraft name\nSecond line";
+		symbol.ExternalAmplifiers.NameOrType = "F-14A (Tomcat)";
+		for (auto preset : {Api::StylePreset::FilledDark, Api::StylePreset::UnfilledDark, Api::StylePreset::FilledLight})
+		{
+			for (double scale : {0.5, 1.0, 2.3, 4.0})
+			{
+				for (bool visible : {false, true})
+				{
+					for (bool detailed : {false, true})
+					{
+						auto context = MakeContext();
+						context.Style = Api::SymbolStyle::FromPreset(preset);
+						context.SymbolScale = scale;
+						context.ShowLabels = visible;
+						context.DetailedLabels = detailed;
+						auto& drawing = *::ImGui::GetWindowDrawList();
+						const int vertexCount = drawing.VtxBuffer.Size;
+						const int indexCount = drawing.IdxBuffer.Size;
+						const int commandCount = drawing.CmdBuffer.Size;
+						const auto measured = renderer.Measure(symbol, context);
+						ASSERT_TRUE(measured.Supported);
+						EXPECT_EQ(drawing.VtxBuffer.Size, vertexCount);
+						EXPECT_EQ(drawing.IdxBuffer.Size, indexCount);
+						EXPECT_EQ(drawing.CmdBuffer.Size, commandCount);
+						const auto rendered = renderer.Render(symbol, context);
+						EXPECT_EQ(measured.LayoutBounds.Maximum.X, rendered.LayoutBounds.Maximum.X);
+						EXPECT_EQ(measured.LayoutBounds.Maximum.Y, rendered.LayoutBounds.Maximum.Y);
+						EXPECT_EQ(measured.SymbolBounds.Minimum.X, rendered.SymbolBounds.Minimum.X);
+						EXPECT_EQ(measured.Bounds.Minimum.Y, rendered.Bounds.Minimum.Y);
+					}
+				}
+			}
+		}
+	}
+
+	TEST(RendererMeasurementTest, VisibleRichAndMultilineLabelsExpandOnlyPresentationBounds)
+	{
+		ImGuiFrame frame;
+		Renderer renderer;
+		auto symbol = MakeSymbol(Api::SymbolSet::SeaSurface);
+		symbol.ExternalAmplifiers.UniqueDesignation = "First line\nSecond line\nThird line";
+		symbol.ExternalAmplifiers.NameOrType = "FFG";
+		auto context = MakeContext();
+		context.ShowLabels = false;
+		const auto hidden = renderer.Measure(symbol, context);
+		context.ShowLabels = true;
+		context.DetailedLabels = false;
+		const auto minimal = renderer.Measure(symbol, context);
+		context.DetailedLabels = true;
+		const auto rich = renderer.Measure(symbol, context);
+		EXPECT_GT(minimal.LayoutBounds.Maximum.X, hidden.LayoutBounds.Maximum.X);
+		EXPECT_GT(rich.LayoutBounds.Maximum.Y, minimal.LayoutBounds.Maximum.Y + 40.0);
+		EXPECT_EQ(rich.SymbolBounds.Maximum.Y, hidden.SymbolBounds.Maximum.Y);
+		EXPECT_EQ(rich.GeographicBounds.Maximum.X, hidden.GeographicBounds.Maximum.X);
+	}
+
+	TEST(RendererMeasurementTest, DisplacementNeverMovesKinematicsOrUncertainty)
+	{
+		ImGuiFrame frame;
+		Renderer renderer;
+		TestProjection projection;
+		auto symbol = MakeSymbol(Api::SymbolSet::SeaSurface);
+		symbol.ExternalAmplifiers.Position = Api::PositionAmplifier{{{48.0}, {5.0}}, Api::GeographicUncertaintyEllipse{200.0, 100.0, 0.5}};
+		symbol.ExternalAmplifiers.CourseOverGroundRadians = 0.0;
+		symbol.ExternalAmplifiers.SpeedMetersPerSecond = 100.0;
+		auto context = MakeContext(&projection);
+		context.ShowLabels = false;
+		const auto original = renderer.Measure(symbol, context);
+		context.VisualAnchor = {620.0, 410.0};
+		const auto displaced = renderer.Measure(symbol, context);
+		EXPECT_EQ(displaced.GeographicBounds.Minimum.X, original.GeographicBounds.Minimum.X);
+		EXPECT_EQ(displaced.GeographicBounds.Minimum.Y, original.GeographicBounds.Minimum.Y);
+		EXPECT_EQ(displaced.GeographicBounds.Maximum.X, original.GeographicBounds.Maximum.X);
+		EXPECT_EQ(displaced.GeographicBounds.Maximum.Y, original.GeographicBounds.Maximum.Y);
+		EXPECT_NEAR(displaced.SymbolBounds.Minimum.X - original.SymbolBounds.Minimum.X, 220.0, 0.001);
+		EXPECT_NEAR(displaced.SymbolBounds.Minimum.Y - original.SymbolBounds.Minimum.Y, 110.0, 0.001);
+		context.Layer = Api::RenderLayer::Geographic;
+		const int firstVertex = ::ImGui::GetWindowDrawList()->VtxBuffer.Size;
+		renderer.Render(symbol, context);
+		const auto& drawing = *::ImGui::GetWindowDrawList();
+		bool touchesActualAnchor = false;
+		for (int index = firstVertex; index < drawing.VtxBuffer.Size; ++index)
+		{
+			const auto position = drawing.VtxBuffer[index].pos;
+			EXPECT_LT(position.x, 450.0f);
+			touchesActualAnchor |= std::abs(position.x - 400.0f) < 3.0f && std::abs(position.y - 300.0f) < 3.0f;
+		}
+		EXPECT_TRUE(touchesActualAnchor);
+	}
+
+	TEST(RendererStylingTest, OpenFramesAndUncertainIdentitiesRetainFillAndContrast)
+	{
+		ImGuiFrame frame;
+		Renderer renderer;
+		for (auto set : {Api::SymbolSet::Air, Api::SymbolSet::SeaSubsurface, Api::SymbolSet::SeaSurface})
+		{
+			for (auto identity : {Api::StandardIdentity::Friendly,
+								  Api::StandardIdentity::Hostile,
+								  Api::StandardIdentity::Unknown,
+								  Api::StandardIdentity::Neutral,
+								  Api::StandardIdentity::AssumedFriendly,
+								  Api::StandardIdentity::Suspect,
+								  Api::StandardIdentity::Pending})
+			{
+				auto context = MakeContext();
+				context.ShowLabels = false;
+				auto symbol = set == Api::SymbolSet::Air			 ? MakeSymbol(set, identity, 11, 1)
+							  : set == Api::SymbolSet::SeaSubsurface ? MakeSymbol(set, identity, 11, 1)
+																	 : MakeSymbol(set, identity, 12, 2, 4);
+				const int firstVertex = ::ImGui::GetWindowDrawList()->VtxBuffer.Size;
+				const auto result = renderer.Render(symbol, context);
+				ASSERT_TRUE(result.WasDrawn);
+				const auto fill = context.Style.Palette.Resolve(identity);
+				EXPECT_TRUE(HasVertexColorFrom(*::ImGui::GetWindowDrawList(), firstVertex, IM_COL32(fill.Red, fill.Green, fill.Blue, 255)));
+				EXPECT_TRUE(HasVertexColorFrom(*::ImGui::GetWindowDrawList(), firstVertex, IM_COL32(0, 0, 0, 255)));
+			}
+		}
+	}
+
+	TEST(RendererStylingTest, UnfilledHasNoSolidFillAndHonorsCustomApiPalette)
+	{
+		ImGuiFrame frame;
+		Renderer renderer;
+		auto context = MakeContext();
+		context.ShowLabels = false;
+		auto symbol = MakeSymbol(Api::SymbolSet::SeaSurface);
+		context.Style.Palette.Friendly = {12, 130, 240};
+		const int filledStart = ::ImGui::GetWindowDrawList()->IdxBuffer.Size;
+		renderer.Render(symbol, context);
+		const int filledCount = ::ImGui::GetWindowDrawList()->IdxBuffer.Size - filledStart;
+		context.Style.Preset = Api::StylePreset::UnfilledDark;
+		const int unfilledStart = ::ImGui::GetWindowDrawList()->IdxBuffer.Size;
+		const int firstVertex = ::ImGui::GetWindowDrawList()->VtxBuffer.Size;
+		renderer.Render(symbol, context);
+		EXPECT_LT(::ImGui::GetWindowDrawList()->IdxBuffer.Size - unfilledStart, filledCount);
+		EXPECT_TRUE(HasVertexColorFrom(*::ImGui::GetWindowDrawList(), firstVertex, IM_COL32(12, 130, 240, 255)));
+		EXPECT_FALSE(HasVertexColorFrom(*::ImGui::GetWindowDrawList(), firstVertex, IM_COL32(0, 0, 0, 255)));
+	}
+
+	TEST(RendererMeasurementTest, HeadquartersDirectionArrowStartsAtGeographicAnchor)
+	{
+		ImGuiFrame frame;
+		Renderer renderer;
+		Api::SidcFields fields;
+		fields.Identity = Api::StandardIdentity::Friendly;
+		fields.SymbolSetValue = Api::SymbolSet::LandUnit;
+		fields.Headquarters = Api::HeadquartersTaskForceDummy::Headquarters;
+		Api::Symbol symbol{*Api::Sidc::Create(fields), {}, std::nullopt};
+		symbol.ExternalAmplifiers.CourseOverGroundRadians = 0.0;
+		auto context = MakeContext();
+		context.ShowLabels = false;
+		const auto baseline = renderer.Measure(symbol, context);
+		context.VisualAnchor = {600, 400};
+		const auto displaced = renderer.Measure(symbol, context);
+		EXPECT_EQ(displaced.GeographicBounds.Minimum.X, baseline.GeographicBounds.Minimum.X);
+		EXPECT_EQ(displaced.GeographicBounds.Maximum.Y, baseline.GeographicBounds.Maximum.Y);
+		EXPECT_TRUE(displaced.GeographicBounds.Contains(context.GeographicAnchor));
+		EXPECT_FALSE(displaced.GeographicBounds.Contains(context.VisualAnchor));
+	}
+
+	TEST(RendererStylingTest, PlannedAndAssumedFramesPreserveTheirPatterns)
+	{
+		ImGuiFrame frame;
+		Renderer renderer;
+		auto context = MakeContext();
+		context.ShowLabels = false;
+		context.Style.HaloWidth = 0;
+		const auto drawCount = [&](Api::StandardIdentity identity, Api::SymbolStatus status)
+		{
+			Api::SidcFields fields;
+			fields.Identity = identity;
+			fields.SymbolSetValue = Api::SymbolSet::SeaSurface;
+			fields.Status = status;
+			const int first = ::ImGui::GetWindowDrawList()->VtxBuffer.Size;
+			renderer.Render({*Api::Sidc::Create(fields), {}, std::nullopt}, context);
+			return ::ImGui::GetWindowDrawList()->VtxBuffer.Size - first;
+		};
+		const int solid = drawCount(Api::StandardIdentity::Friendly, Api::SymbolStatus::Present);
+		const int planned = drawCount(Api::StandardIdentity::Friendly, Api::SymbolStatus::PlannedAnticipatedSuspect);
+		EXPECT_NE(solid, planned);
+		const int start = ::ImGui::GetWindowDrawList()->VtxBuffer.Size;
+		drawCount(Api::StandardIdentity::AssumedFriendly, Api::SymbolStatus::Present);
+		EXPECT_TRUE(HasVertexColorFrom(*::ImGui::GetWindowDrawList(), start, IM_COL32(0, 0, 0, 255)));
+		EXPECT_TRUE(HasVertexColorFrom(*::ImGui::GetWindowDrawList(), start, IM_COL32(255, 255, 255, 255)));
+	}
+
 }

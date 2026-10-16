@@ -9,6 +9,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 	class Renderer final : public Api::IRenderer
 	{
 	public:
+		Api::MeasureResult Measure(const Api::Symbol& symbol, const Api::RenderContext& context) override;
 		Api::RenderResult Render(const Api::Symbol& symbol, const Api::RenderContext& context) override;
 	};
 }
