@@ -549,12 +549,12 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			case 1:
 				return "A";
 			case 2:
-				return "ASW";
+				return "B";
 			case 3:
 				return "C";
 			case 4:
 				return "F";
-			case 5:
+			case 6:
 				return "K";
 			case 12:
 				return "AEW";
@@ -574,13 +574,50 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			return fields.SymbolSetValue == Api::SymbolSet::SeaSurface && fields.ThirdTen[0] == '1' && fields.Modifier1 == 33;
 		}
 
-		bool IsSupportedEntity(const Api::SidcFields& fields)
+		std::string_view CommonRoleLabel(const Api::SidcFields& fields)
 		{
+			if (fields.ThirdTen[0] == '0')
+			{
+				return fields.SymbolSetValue == Api::SymbolSet::SeaSurface && fields.Modifier1 == 2 ? "AAW" : "";
+			}
+			if (fields.ThirdTen[0] != '1')
+			{
+				return {};
+			}
+			switch (fields.Modifier1)
+			{
+			case 6:
+				return "A";
+			case 25:
+				return "ISR";
+			case 33:
+				return "G";
+			case 51:
+				return "ASW";
+			case 54:
+				return "MW";
+			case 55:
+				return "SUW";
+			case 66:
+				return "EW";
+			default:
+				return {};
+			}
+		}
+
+		bool IsSupportedEntity(const Api::SidcFields& originalFields)
+		{
+			auto fields = originalFields;
+			if (!CommonRoleLabel(fields).empty() || (fields.ThirdTen[0] == '1' && fields.Modifier1 == 10))
+			{
+				fields.ThirdTen[0] = '0';
+				fields.Modifier1 = 0;
+			}
 			if (fields.ThirdTen[1] != '0' || (fields.ThirdTen[0] != '0' && !HasGuidedMissileRole(fields)))
 			{
 				return false;
 			}
-			if (fields.Modifier2 != 0 && !(fields.SymbolSetValue == Api::SymbolSet::AirMissile && fields.Modifier1 == 1 && fields.Modifier2 == 1))
+			if (fields.Modifier2 != 0 && !(fields.SymbolSetValue == Api::SymbolSet::AirMissile && fields.Modifier2 <= 3))
 			{
 				return false;
 			}
@@ -598,7 +635,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 				return (fields.Entity == 0 && fields.EntityType == 0 && fields.EntitySubtype == 0 && fields.Modifier1 == 0) ||
 					   (fields.Entity == 11 && fields.EntityType == 0 && fields.EntitySubtype == 0 && fields.Modifier1 == 0);
 			case Api::SymbolSet::Air:
-				return (fields.Entity == 0 && fields.EntityType == 0 && fields.EntitySubtype == 0 && fields.Modifier1 == 0) ||
+				return (fields.Entity == 0 && fields.EntityType == 0 && fields.EntitySubtype == 0 && (fields.Modifier1 == 0 || !AircraftRoleLabel(fields.Modifier1).empty())) ||
 					   (fields.Entity == 11 && (fields.EntityType == 1 || fields.EntityType == 2) && fields.EntitySubtype == 0 &&
 						(fields.Modifier1 == 0 || !AircraftRoleLabel(fields.Modifier1).empty()));
 			case Api::SymbolSet::AirMissile:
@@ -753,9 +790,10 @@ namespace NavalCommand::Symbology::Nato::ImGui
 				{
 					DrawCenteredEntityText(drawing, "A", point(65, 75), scale, color, bounds);
 				}
-				if (fields.Modifier2 == 1)
+				if (fields.Modifier2 >= 1 && fields.Modifier2 <= 3)
 				{
-					DrawCenteredEntityText(drawing, "A", point(65, 125), scale, color, bounds);
+					const std::string_view destination = fields.Modifier2 == 1 ? "A" : fields.Modifier2 == 2 ? "S" : "U";
+					DrawCenteredEntityText(drawing, destination, point(135, 100), scale, color, bounds);
 				}
 				return;
 			}
@@ -1219,6 +1257,61 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		DrawPatternedPath(drawing, framePoints, frameColor, lineThickness, frameIsClosed, dashLength, gapLength, uncertainIdentity, bounds);
 
 		const ImU32 iconColor = filled ? ToImGui(context.Style.IconForeground) : affiliationColor;
+		const auto drawEntityAndRole = [&]()
+		{
+			// Resolve the modifier separately so every supported main icon can carry it.
+			auto mainFields = fields;
+			const auto commonRole = CommonRoleLabel(fields);
+			const bool cargoRole = fields.ThirdTen[0] == '1' && fields.Modifier1 == 10;
+			const bool compactGuidedCruiser = HasGuidedMissileRole(fields) && fields.Entity == 12 && fields.EntityType == 2 && fields.EntitySubtype == 2;
+			if ((!commonRole.empty() || cargoRole) && !compactGuidedCruiser)
+			{
+				mainFields.Modifier1 = 0;
+				mainFields.ThirdTen[0] = '0';
+				// Hostile open frames occupy only one half of the anchor. Keep both
+				// sectors inside that triangle instead of placing a role above its opening.
+				const bool hostileOpen = GetIdentityGroup(fields.Identity) == IdentityGroup::Hostile &&
+										 (*frameDimension == FrameDimension::AirOrSpace || *frameDimension == FrameDimension::SeaSubsurface);
+				const float domainDirection = *frameDimension == FrameDimension::SeaSubsurface ? 1.0f : -1.0f;
+				const ImVec2 mainCenter{frameCenter.x, frameCenter.y + (hostileOpen ? domainDirection * 11.0f : 5.0f) * scale};
+				DrawEntityIcon(drawing, mainFields, mainCenter, scale * (hostileOpen ? 0.45f : 0.78f), iconColor, bounds);
+				const ImVec2 roleCenter{frameCenter.x, frameCenter.y + (hostileOpen ? domainDirection * 3.5f : -9.0f) * scale};
+				const float roleScale = scale * (hostileOpen ? 0.48f : 0.72f);
+				if (cargoRole)
+				{
+					// APP-06 common modifier 110: cargo, divided rectangular box.
+					const float halfWidth = 5.0f * scale;
+					const float halfHeight = 3.0f * scale;
+					DrawStandardPath(drawing,
+									 {{roleCenter.x - halfWidth, roleCenter.y - halfHeight},
+									  {roleCenter.x + halfWidth, roleCenter.y - halfHeight},
+									  {roleCenter.x + halfWidth, roleCenter.y + halfHeight},
+									  {roleCenter.x - halfWidth, roleCenter.y + halfHeight}},
+									 iconColor,
+									 lineThickness,
+									 true,
+									 false,
+									 bounds);
+					drawing.AddLine({roleCenter.x, roleCenter.y - halfHeight}, {roleCenter.x, roleCenter.y + halfHeight}, iconColor, lineThickness);
+				}
+				else
+				{
+					DrawCenteredEntityText(drawing, commonRole, roleCenter, roleScale, iconColor, bounds);
+				}
+			}
+			else
+			{
+				DrawEntityIcon(drawing, fields, frameCenter, scale, iconColor, bounds);
+				if (fields.SymbolSetValue == Api::SymbolSet::Air && fields.Entity == 0)
+				{
+					if (const auto label = AircraftRoleLabel(fields.Modifier1); !label.empty())
+					{
+						DrawCenteredEntityText(drawing, label, frameCenter, scale * 0.8f, iconColor, bounds);
+					}
+				}
+			}
+		};
+
 		// A narrow affiliation halo keeps icon strokes beyond an open contour
 		// visible without adding a closing frame or a rectangular background.
 		const float haloWidth = static_cast<float>(std::clamp(context.Style.HaloWidth, 0.0, 2.0)) * scale;
@@ -1226,11 +1319,11 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		{
 			drawing.OverrideColor = affiliationColor;
 			drawing.HaloWidth = haloWidth;
-			DrawEntityIcon(drawing, fields, frameCenter, scale, iconColor, bounds);
+			drawEntityAndRole();
 			drawing.OverrideColor.reset();
 			drawing.HaloWidth = 0.0f;
 		}
-		DrawEntityIcon(drawing, fields, frameCenter, scale, iconColor, bounds);
+		drawEntityAndRole();
 
 		// Conservative ink padding includes antialiasing, halo and thicker styles.
 		const float inkPadding = haloWidth + BASE_LINE_THICKNESS * scale * (drawing.ThicknessFactor - 0.5f);

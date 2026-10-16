@@ -114,6 +114,52 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		EXPECT_NEAR(air.SymbolBounds.Maximum.Y - context.VisualAnchor.Y, context.VisualAnchor.Y - subsurface.SymbolBounds.Minimum.Y, 0.001);
 	}
 
+	TEST(RendererTest, CommonMissionModifiersRenderAcrossMainIconsAndStyles)
+	{
+		ImGuiFrame frame;
+		Renderer renderer;
+		const std::array mainIcons{MakeSymbol(Api::SymbolSet::SeaSurface, Api::StandardIdentity::Unknown, 12, 1),
+								   MakeSymbol(Api::SymbolSet::SeaSurface, Api::StandardIdentity::Friendly, 12, 2, 3),
+								   MakeSymbol(Api::SymbolSet::SeaSurface, Api::StandardIdentity::Friendly, 13, 1),
+								   MakeSymbol(Api::SymbolSet::SeaSurface, Api::StandardIdentity::Neutral, 14, 1),
+								   MakeSymbol(Api::SymbolSet::SeaSubsurface, Api::StandardIdentity::Unknown, 11, 1),
+								   MakeSymbol(Api::SymbolSet::SeaSubsurface, Api::StandardIdentity::Hostile, 13, 1),
+								   MakeSymbol(Api::SymbolSet::Air, Api::StandardIdentity::Unknown, 11, 1),
+								   MakeSymbol(Api::SymbolSet::Air, Api::StandardIdentity::Unknown, 11, 2),
+								   MakeSymbol(Api::SymbolSet::Air),
+								   MakeSymbol(Api::SymbolSet::LandEquipment),
+								   MakeSymbol(Api::SymbolSet::LandInstallation),
+								   MakeSymbol(Api::SymbolSet::MineWarfare, Api::StandardIdentity::Friendly, 11)};
+		for (int styleIndex = 0; styleIndex < 2; ++styleIndex)
+		{
+			auto context = MakeContext();
+			context.ShowLabels = false;
+			context.Style = Api::SymbolStyle::FromPreset(static_cast<Api::StylePreset>(styleIndex));
+			for (const auto& mainIcon : mainIcons)
+			{
+				for (const std::uint8_t modifier : {6, 10, 25, 33, 51, 54, 55, 66})
+				{
+					auto fields = mainIcon.Identification.Fields();
+					fields.Modifier1 = modifier;
+					fields.ThirdTen[0] = '1';
+					const auto sidc = Api::Sidc::Create(fields);
+					ASSERT_TRUE(sidc);
+					const Api::Symbol symbol{*sidc, {}, std::nullopt};
+					auto& drawing = *::ImGui::GetWindowDrawList();
+					const int firstVertex = drawing.VtxBuffer.Size;
+					const auto measured = renderer.Measure(symbol, context);
+					EXPECT_EQ(drawing.VtxBuffer.Size, firstVertex);
+					ASSERT_TRUE(measured.Supported) << static_cast<int>(fields.SymbolSetValue) << "/" << static_cast<int>(modifier);
+					const auto rendered = renderer.Render(symbol, context);
+					EXPECT_TRUE(rendered.WasDrawn);
+					EXPECT_GT(drawing.VtxBuffer.Size, firstVertex);
+					EXPECT_NEAR(rendered.SymbolBounds.Minimum.Y, measured.SymbolBounds.Minimum.Y, 0.001);
+					EXPECT_NEAR(rendered.SymbolBounds.Maximum.Y, measured.SymbolBounds.Maximum.Y, 0.001);
+				}
+			}
+		}
+	}
+
 	TEST(RendererTest, GuidedMissileCruiserCommonModifierIsSupported)
 	{
 		ImGuiFrame frame;
