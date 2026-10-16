@@ -137,7 +137,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			context.Style = Api::SymbolStyle::FromPreset(static_cast<Api::StylePreset>(styleIndex));
 			for (const auto& mainIcon : mainIcons)
 			{
-				for (const std::uint8_t modifier : {6, 10, 25, 33, 51, 54, 55, 66})
+				for (const std::uint8_t modifier : {6, 8, 10, 25, 33, 51, 54, 55, 66})
 				{
 					auto fields = mainIcon.Identification.Fields();
 					fields.Modifier1 = modifier;
@@ -364,9 +364,6 @@ namespace NavalCommand::Symbology::Nato::ImGui
 									 EntityCase{Api::SymbolSet::SeaSurface, 13, 1, 0, 0},
 									 EntityCase{Api::SymbolSet::SeaSurface, 14, 1, 0, 0},
 									 EntityCase{Api::SymbolSet::SeaSubsurface, 11, 1, 0, 0},
-									 EntityCase{Api::SymbolSet::SeaSubsurface, 11, 1, 0, 8},
-									 EntityCase{Api::SymbolSet::SeaSubsurface, 11, 1, 0, 9},
-									 EntityCase{Api::SymbolSet::SeaSubsurface, 11, 1, 0, 10},
 									 EntityCase{Api::SymbolSet::SeaSubsurface, 13, 1, 0, 0},
 									 EntityCase{Api::SymbolSet::SeaSubsurface, 13, 3, 0, 0},
 									 EntityCase{Api::SymbolSet::MineWarfare, 11, 0, 0, 0},

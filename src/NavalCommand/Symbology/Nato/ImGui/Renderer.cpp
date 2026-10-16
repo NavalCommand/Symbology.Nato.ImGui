@@ -588,6 +588,8 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			{
 			case 6:
 				return "A";
+			case 8:
+				return "BM";
 			case 25:
 				return "ISR";
 			case 33:
@@ -656,8 +658,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 					   ((fields.Entity == 13 || fields.Entity == 14) && fields.EntityType == 1 && fields.EntitySubtype == 0 && fields.Modifier1 == 0);
 			case Api::SymbolSet::SeaSubsurface:
 				return (fields.Entity == 0 && fields.EntityType == 0 && fields.EntitySubtype == 0 && fields.Modifier1 == 0) ||
-					   (fields.Entity == 11 && fields.EntityType == 1 && fields.EntitySubtype == 0 &&
-						(fields.Modifier1 == 0 || fields.Modifier1 == 8 || fields.Modifier1 == 9 || fields.Modifier1 == 10)) ||
+					   (fields.Entity == 11 && fields.EntityType == 1 && fields.EntitySubtype == 0 && fields.Modifier1 == 0) ||
 					   (fields.Entity == 13 && (fields.EntityType == 1 || fields.EntityType == 3) && fields.EntitySubtype == 0 && fields.Modifier1 == 0);
 			default:
 				return false;
@@ -885,18 +886,6 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			if (fields.SymbolSetValue == Api::SymbolSet::SeaSubsurface && fields.Entity == 11 && fields.EntityType == 1)
 			{
 				DrawStandardPath(drawing, {point(75, 85), point(125, 85), point(140, 100), point(125, 115), point(75, 115), point(60, 100)}, color, thickness, true, true, bounds);
-				if (fields.Modifier1 == 8 || fields.Modifier1 == 9 || fields.Modifier1 == 10)
-				{
-					const std::string_view mission = fields.Modifier1 == 8 ? "A" : fields.Modifier1 == 9 ? "B" : "G";
-					const float textScale = scale * 0.8f;
-					const float textHeight =
-						::ImGui::GetFont()
-							->CalcTextSizeA(
-								std::max(14.0f, ::ImGui::GetFontSize()) * textScale, std::numeric_limits<float>::max(), 0.0f, mission.data(), mission.data() + mission.size())
-							.y;
-					const ImVec2 modifierCenter{center.x, point(100, 85).y - 2.0f * scale - textHeight * 0.5f};
-					DrawCenteredEntityText(drawing, mission, modifierCenter, textScale, color, bounds);
-				}
 				return;
 			}
 			if (fields.SymbolSetValue == Api::SymbolSet::SeaSubsurface && fields.Entity == 13 && fields.EntityType == 1)

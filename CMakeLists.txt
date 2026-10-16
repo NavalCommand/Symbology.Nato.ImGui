@@ -7,6 +7,6 @@ FetchContent_Declare(ncbuild GIT_REPOSITORY https://github.com/NavalCommand/Buil
 FetchContent_MakeAvailable(ncbuild)
 include("${ncbuild_SOURCE_DIR}/NavalCommand.Build.CMake.cmake")
 
-NavalCommandAddDependency(https://github.com/NavalCommand/Symbology.Nato.Api.git 6585ad91f58dbc950d76a244617d9c54218d9181)
+NavalCommandAddDependency(https://github.com/NavalCommand/Symbology.Nato.Api.git 326f5750ea20379df78fc978db30a9e8868b92b5)
 
 NavalCommandConfigureModule()
