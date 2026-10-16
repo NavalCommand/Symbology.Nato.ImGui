@@ -118,6 +118,29 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		EXPECT_NE(friendly.Bounds.Minimum.X, friendly.Bounds.Maximum.X);
 	}
 
+	TEST(RendererTest, UsesRoundedFriendlyFrameForSeaSurfaceSymbols)
+	{
+		ImGuiFrame frame;
+		Renderer renderer;
+		auto* drawing = ::ImGui::GetWindowDrawList();
+		const int initialVertexCount = drawing->VtxBuffer.Size;
+
+		const auto seaSurface = renderer.Render(
+			MakeSymbol(Api::SymbolSet::SeaSurface, Api::StandardIdentity::Friendly),
+			MakeContext());
+		const int seaSurfaceVertexCount = drawing->VtxBuffer.Size - initialVertexCount;
+
+		const int neutralStart = drawing->VtxBuffer.Size;
+		const auto neutralSeaSurface = renderer.Render(
+			MakeSymbol(Api::SymbolSet::SeaSurface, Api::StandardIdentity::Neutral),
+			MakeContext());
+		const int neutralSeaSurfaceVertexCount = drawing->VtxBuffer.Size - neutralStart;
+
+		ASSERT_TRUE(seaSurface.WasDrawn);
+		ASSERT_TRUE(neutralSeaSurface.WasDrawn);
+		EXPECT_GT(seaSurfaceVertexCount, neutralSeaSurfaceVertexCount + 30);
+	}
+
 	TEST(RendererTest, AppliesScaleAndReturnsBoundsThatIncludeText)
 	{
 		ImGuiFrame frame;

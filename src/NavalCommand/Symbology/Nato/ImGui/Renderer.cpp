@@ -224,13 +224,15 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		std::vector<ImVec2> FramePoints(FrameDimension dimension, IdentityGroup group, ImVec2 center, float scale)
 		{
 			const float halfWidth = BASE_FRAME_HALF_WIDTH * scale;
-			const float halfHeight = BASE_FRAME_HALF_HEIGHT * scale;
+			const float halfHeight = dimension == FrameDimension::Land && group == IdentityGroup::Friend
+				? BASE_FRAME_HALF_HEIGHT * scale : halfWidth;
 			const auto point = [&](float horizontal, float vertical)
 			{
 				return ImVec2{center.x + horizontal * halfWidth, center.y + vertical * halfHeight};
 			};
 
-			if (dimension == FrameDimension::Equipment && group == IdentityGroup::Friend)
+			if ((dimension == FrameDimension::Equipment || dimension == FrameDimension::SeaSurface)
+				&& group == IdentityGroup::Friend)
 			{
 				std::vector<ImVec2> points;
 				points.reserve(33);
@@ -243,49 +245,33 @@ namespace NavalCommand::Symbology::Nato::ImGui
 				return points;
 			}
 
-			if (group == IdentityGroup::Unknown && dimension == FrameDimension::AirOrSpace)
-			{
-				std::vector<ImVec2> points;
-				points.reserve(27);
-				const ImVec2 leftBottom = point(-0.38f, 0.88f);
-				const ImVec2 leftTop = point(-0.38f, -0.5f);
-				const ImVec2 rightTop = point(0.38f, -0.5f);
-				const ImVec2 rightBottom = point(0.38f, 0.88f);
-				points.push_back(leftBottom);
-				AppendCubic(points, leftBottom, point(-1.08f, 0.88f), point(-1.0f, -0.5f), leftTop, 8);
-				AppendCubic(points, leftTop, point(-0.38f, -1.28f), point(0.38f, -1.28f), rightTop, 8);
-				AppendCubic(points, rightTop, point(1.0f, -0.5f), point(1.08f, 0.88f), rightBottom, 8);
-				return points;
-			}
-
-			if (group == IdentityGroup::Unknown && dimension == FrameDimension::SeaSubsurface)
-			{
-				std::vector<ImVec2> points;
-				points.reserve(27);
-				const ImVec2 leftTop = point(-0.38f, -0.88f);
-				const ImVec2 leftBottom = point(-0.38f, 0.5f);
-				const ImVec2 rightBottom = point(0.38f, 0.5f);
-				const ImVec2 rightTop = point(0.38f, -0.88f);
-				points.push_back(leftTop);
-				AppendCubic(points, leftTop, point(-1.08f, -0.88f), point(-1.0f, 0.5f), leftBottom, 8);
-				AppendCubic(points, leftBottom, point(-0.38f, 1.28f), point(0.38f, 1.28f), rightBottom, 8);
-				AppendCubic(points, rightBottom, point(1.0f, 0.5f), point(1.08f, -0.88f), rightTop, 8);
-				return points;
-			}
-
 			if (group == IdentityGroup::Unknown)
 			{
+				// All lobes use the same geometry and radius; open frames omit one lobe.
 				std::vector<ImVec2> points;
-				points.reserve(36);
-				const ImVec2 topLeft = point(-0.39f, -0.46f);
-				const ImVec2 topRight = point(0.39f, -0.46f);
-				const ImVec2 bottomRight = point(0.39f, 0.46f);
-				const ImVec2 bottomLeft = point(-0.39f, 0.46f);
-				points.push_back(topLeft);
-				AppendCubic(points, topLeft, point(-0.39f, -1.28f), point(0.39f, -1.28f), topRight, 8);
-				AppendCubic(points, topRight, point(1.28f, -0.46f), point(1.28f, 0.46f), bottomRight, 8);
-				AppendCubic(points, bottomRight, point(0.39f, 1.28f), point(-0.39f, 1.28f), bottomLeft, 8);
-				AppendCubic(points, bottomLeft, point(-1.28f, 0.46f), point(-1.28f, -0.46f), topLeft, 8);
+				const ImVec2 topLeft = point(-0.4f, -0.4f);
+				const ImVec2 topRight = point(0.4f, -0.4f);
+				const ImVec2 bottomRight = point(0.4f, 0.4f);
+				const ImVec2 bottomLeft = point(-0.4f, 0.4f);
+				if (dimension == FrameDimension::SeaSubsurface)
+				{
+					points.push_back(topRight);
+				}
+				else
+				{
+					points.push_back(bottomLeft);
+					AppendCubic(points, bottomLeft, point(-1.2f, 0.4f), point(-1.2f, -0.4f), topLeft, 8);
+					AppendCubic(points, topLeft, point(-0.4f, -1.2f), point(0.4f, -1.2f), topRight, 8);
+				}
+				AppendCubic(points, topRight, point(1.2f, -0.4f), point(1.2f, 0.4f), bottomRight, 8);
+				if (dimension != FrameDimension::AirOrSpace)
+				{
+					AppendCubic(points, bottomRight, point(0.4f, 1.2f), point(-0.4f, 1.2f), bottomLeft, 8);
+				}
+				if (dimension == FrameDimension::SeaSubsurface)
+				{
+					AppendCubic(points, bottomLeft, point(-1.2f, 0.4f), point(-1.2f, -0.4f), topLeft, 8);
+				}
 				return points;
 			}
 
@@ -307,7 +293,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 				{
 					return {point(-1.0f, 0.9f), point(-1.0f, -1.0f), point(1.0f, -1.0f), point(1.0f, 0.9f)};
 				}
-				return {point(-1.0f, 0.9f), point(-1.0f, -0.25f), point(0.0f, -1.28f), point(1.0f, -0.25f), point(1.0f, 0.9f)};
+				return {point(-1.0f, 0.0f), point(0.0f, -1.0f), point(1.0f, 0.0f)};
 			}
 
 			if (dimension == FrameDimension::SeaSubsurface)
@@ -328,7 +314,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 				{
 					return {point(-1.0f, -0.9f), point(-1.0f, 1.0f), point(1.0f, 1.0f), point(1.0f, -0.9f)};
 				}
-				return {point(-1.0f, -0.9f), point(-1.0f, 0.25f), point(0.0f, 1.28f), point(1.0f, 0.25f), point(1.0f, -0.9f)};
+				return {point(-1.0f, 0.0f), point(0.0f, 1.0f), point(1.0f, 0.0f)};
 			}
 
 			if (group == IdentityGroup::Friend && (dimension == FrameDimension::Land || dimension == FrameDimension::Equipment))
@@ -338,11 +324,11 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			}
 			if (group == IdentityGroup::Neutral)
 			{
-				return {point(-0.78f, -0.9f), point(0.78f, -0.9f), point(0.78f, 0.9f), point(-0.78f, 0.9f)};
+				return {point(-0.9f, -0.9f), point(0.9f, -0.9f), point(0.9f, 0.9f), point(-0.9f, 0.9f)};
 			}
 			if (group == IdentityGroup::Hostile)
 			{
-				return {point(0.0f, -1.28f), point(1.0f, 0.0f), point(0.0f, 1.28f), point(-1.0f, 0.0f)};
+				return {point(0.0f, -1.0f), point(1.0f, 0.0f), point(0.0f, 1.0f), point(-1.0f, 0.0f)};
 			}
 			return {point(-1.0f, -0.9f), point(1.0f, -0.9f), point(1.0f, 0.9f), point(-1.0f, 0.9f)};
 		}
@@ -418,7 +404,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 
 		bool IsSupportedEntity(const Api::SidcFields& fields)
 		{
-			if (fields.Modifier2 != 0)
+			if (fields.Modifier2 != 0 && !(fields.SymbolSetValue == Api::SymbolSet::AirMissile && fields.Modifier1 == 1 && fields.Modifier2 == 1))
 			{
 				return false;
 			}
@@ -437,10 +423,11 @@ namespace NavalCommand::Symbology::Nato::ImGui
 					|| (fields.Entity == 11 && fields.EntityType == 0 && fields.EntitySubtype == 0 && fields.Modifier1 == 0);
 			case Api::SymbolSet::Air:
 				return (fields.Entity == 0 && fields.EntityType == 0 && fields.EntitySubtype == 0 && fields.Modifier1 == 0)
-					|| (fields.Entity == 11 && (fields.EntityType == 1 || fields.EntityType == 2) && fields.EntitySubtype == 0 && fields.Modifier1 == 0);
+					|| (fields.Entity == 11 && (fields.EntityType == 1 || fields.EntityType == 2) && fields.EntitySubtype == 0
+						&& (fields.Modifier1 == 0 || (fields.EntityType == 1 && fields.Modifier1 == 4)));
 			case Api::SymbolSet::AirMissile:
 				return fields.Entity == 11 && fields.EntityType == 0 && fields.EntitySubtype == 0
-					&& (fields.Modifier1 == 0 || fields.Modifier1 == 6 || fields.Modifier1 == 7);
+					&& (fields.Modifier1 == 0 || fields.Modifier1 == 1 || fields.Modifier1 == 6 || fields.Modifier1 == 7);
 			case Api::SymbolSet::SpaceMissile:
 				return fields.Entity == 0 && fields.EntityType == 0 && fields.EntitySubtype == 0 && fields.Modifier1 == 0;
 			case Api::SymbolSet::LandEquipment:
@@ -511,12 +498,25 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			ImU32 color,
 			BoundsBuilder& bounds)
 		{
-			const float fontSize = ::ImGui::GetFontSize() * scale * 0.65f;
-			ImVec2 textSize = ::ImGui::CalcTextSize(text.data(), text.data() + text.size());
-			const float textScale = fontSize / ::ImGui::GetFontSize();
-			textSize.x *= textScale;
-			textSize.y *= textScale;
-			const ImVec2 position{center.x - textSize.x * 0.5f, center.y - textSize.y * 0.5f};
+			const float fontSize = std::max(14.0f, ::ImGui::GetFontSize()) * scale;
+			const ImVec2 textSize = ::ImGui::GetFont()->CalcTextSizeA(
+				fontSize, std::numeric_limits<float>::max(), 0.0f, text.data(), text.data() + text.size());
+			// Center the visible glyph ink, rather than its advance widths and side bearings.
+			ImFontBaked* font = ::ImGui::GetFont()->GetFontBaked(fontSize);
+			float advance = 0.0f;
+			float inkLeft = std::numeric_limits<float>::max();
+			float inkRight = std::numeric_limits<float>::lowest();
+			for (const unsigned char character : text)
+			{
+				if (const ImFontGlyph* glyph = font->FindGlyph(character))
+				{
+					inkLeft = std::min(inkLeft, advance + glyph->X0);
+					inkRight = std::max(inkRight, advance + glyph->X1);
+					advance += glyph->AdvanceX;
+				}
+			}
+			const float inkCenter = inkLeft <= inkRight ? (inkLeft + inkRight) * 0.5f : textSize.x * 0.5f;
+			const ImVec2 position{center.x - inkCenter, center.y - textSize.y * 0.5f};
 			drawing.AddText(nullptr, fontSize, position, color, text.data(), text.data() + text.size());
 			bounds.AddRectangle(position, {position.x + textSize.x, position.y + textSize.y});
 		}
@@ -532,7 +532,11 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			const float thickness = BASE_LINE_THICKNESS * scale;
 			const auto point = [&](float x, float y)
 			{
-				return StandardPoint(center, scale, x, y);
+				const bool capitalSurfaceIcon = fields.SymbolSetValue == Api::SymbolSet::SeaSurface && fields.Entity == 12
+					&& (fields.EntityType == 1 || (fields.EntityType == 2 && fields.EntitySubtype == 0));
+				const bool submarineIcon = fields.SymbolSetValue == Api::SymbolSet::SeaSubsurface && fields.Entity == 11;
+				const float geometryScale = capitalSurfaceIcon ? 2.8f : submarineIcon ? 1.8f : 1.25f;
+				return StandardPoint(center, scale * geometryScale, x, y);
 			};
 
 			if (fields.SymbolSetValue == Api::SymbolSet::Air && fields.Entity == 11 && fields.EntityType == 1)
@@ -551,6 +555,10 @@ namespace NavalCommand::Symbology::Nato::ImGui
 				drawing.PathFillConcave(color);
 				buildPath();
 				drawing.PathStroke(color, thickness, ImDrawFlags_Closed);
+				if (fields.Modifier1 == 4)
+				{
+					DrawCenteredEntityText(drawing, "F", point(100, 55), scale, color, bounds);
+				}
 				bounds.Add(point(55, 88), thickness);
 				bounds.Add(point(145, 112), thickness);
 				return;
@@ -570,6 +578,14 @@ namespace NavalCommand::Symbology::Nato::ImGui
 				if (fields.Modifier1 == 6 || fields.Modifier1 == 7)
 				{
 					DrawCenteredEntityText(drawing, fields.Modifier1 == 6 ? "B" : "C", point(68, 100), scale, color, bounds);
+				}
+				if (fields.Modifier1 == 1)
+				{
+					DrawCenteredEntityText(drawing, "A", point(65, 75), scale, color, bounds);
+				}
+				if (fields.Modifier2 == 1)
+				{
+					DrawCenteredEntityText(drawing, "A", point(65, 125), scale, color, bounds);
 				}
 				return;
 			}
@@ -638,8 +654,8 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			if (fields.SymbolSetValue == Api::SymbolSet::SeaSubsurface && fields.Entity == 13 && fields.EntityType == 1)
 			{
 				DrawStandardPath(drawing,
-					{point(65, 105), point(60, 100), point(65, 95), point(125, 95), point(130, 100), point(135, 95),
-						point(135, 105), point(130, 100), point(125, 105)}, color, thickness, true, true, bounds);
+					{point(50, 110), point(45, 100), point(50, 90), point(130, 90), point(135, 100), point(150, 88),
+						point(150, 112), point(135, 100), point(130, 110)}, color, thickness, true, true, bounds);
 				return;
 			}
 			if (fields.SymbolSetValue == Api::SymbolSet::SeaSubsurface && fields.Entity == 13 && fields.EntityType == 3)
@@ -807,7 +823,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		{
 			if (!amplifiers.HeadingRadians || !std::isfinite(*amplifiers.HeadingRadians))
 			{
-				return std::nullopt;
+				return "HDG unknown";
 			}
 			constexpr double RADIANS_TO_DEGREES = 180.0 / std::numbers::pi;
 			const double degrees = std::fmod(*amplifiers.HeadingRadians * RADIANS_TO_DEGREES + 360.0, 360.0);
@@ -819,7 +835,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			if (!amplifiers.SpeedMetersPerSecond || !std::isfinite(*amplifiers.SpeedMetersPerSecond)
 				|| *amplifiers.SpeedMetersPerSecond < 0.0)
 			{
-				return std::nullopt;
+				return "SPD unknown";
 			}
 			return "SPD " + FormatNumber(*amplifiers.SpeedMetersPerSecond) + " m/s";
 		}
@@ -828,7 +844,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		{
 			if (!amplifiers.VerticalPosition || !std::isfinite(amplifiers.VerticalPosition->ValueMeters))
 			{
-				return std::nullopt;
+				return "ELEV unknown";
 			}
 			std::string label;
 			switch (amplifiers.VerticalPosition->Reference)
@@ -1017,6 +1033,8 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		const ImU32 iconColor = affiliationColor;
 		DrawEntityIcon(drawing, fields, frameCenter, scale, iconColor, bounds);
 
+		const Api::ScreenRectangle symbolBounds = bounds.ToScreenRectangle();
+
 		if (IsTaskForce(fields.Headquarters))
 		{
 			const ImVec2 bracketLeft{frameCenter.x - halfWidth * 0.56f, frameCenter.y - halfHeight - 4.0f * scale};
@@ -1049,8 +1067,9 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		if (fields.ContextValue == Api::Context::Exercise || fields.ContextValue == Api::Context::Simulation)
 		{
 			const char* contextMarker = fields.ContextValue == Api::Context::Exercise ? "E" : "S";
-			const ImVec2 contextPosition{frameCenter.x + halfWidth * 0.76f, frameCenter.y - halfHeight - 2.0f * scale};
 			const float fontSize = ::ImGui::GetFontSize() * scale;
+			const ImVec2 contextPosition{static_cast<float>(symbolBounds.Maximum.X) + 3.0f * scale,
+				static_cast<float>(symbolBounds.Minimum.Y) - fontSize - 3.0f * scale};
 			drawing.AddText(nullptr, fontSize, contextPosition, affiliationColor, contextMarker);
 			ImVec2 textSize = ::ImGui::CalcTextSize(contextMarker);
 			textSize.x *= scale;
@@ -1078,37 +1097,43 @@ namespace NavalCommand::Symbology::Nato::ImGui
 				symbol.ExternalAmplifiers.Position->Location,
 				*symbol.ExternalAmplifiers.Position->Uncertainty,
 				*context.Projection,
-				affiliationColor,
+				IM_COL32(255, 165, 0, 255),
 				bounds);
 		}
 
 		const float fontSize = ::ImGui::GetFontSize() * scale;
 		const float labelStartX = frameCenter.x + halfWidth + 7.0f * scale;
 		float labelY = frameCenter.y - halfHeight * 0.78f;
-		if (symbol.ExternalAmplifiers.UniqueDesignation)
+		const bool hovered = context.ShowLabelsWhenHovered && ::ImGui::IsMouseHoveringRect(
+			{static_cast<float>(symbolBounds.Minimum.X), static_cast<float>(symbolBounds.Minimum.Y)},
+			{static_cast<float>(symbolBounds.Maximum.X), static_cast<float>(symbolBounds.Maximum.Y)});
+		if (context.ShowLabels || hovered)
 		{
-			DrawTextAmplifier(drawing, *symbol.ExternalAmplifiers.UniqueDesignation, {labelStartX, labelY}, fontSize, affiliationColor, bounds);
-			labelY += fontSize + 2.0f * scale;
-		}
-		if (symbol.ExternalAmplifiers.NameOrType)
-		{
-			DrawTextAmplifier(drawing, *symbol.ExternalAmplifiers.NameOrType, {labelStartX, labelY}, fontSize, affiliationColor, bounds);
-			labelY += fontSize + 2.0f * scale;
-		}
-		if (symbol.ExternalAmplifiers.AdditionalInformation)
-		{
-			DrawTextAmplifier(drawing, *symbol.ExternalAmplifiers.AdditionalInformation, {labelStartX, labelY}, fontSize, affiliationColor, bounds);
-			labelY += fontSize + 2.0f * scale;
-		}
-		for (const auto& label : {
-				 HeadingLabel(symbol.ExternalAmplifiers),
-				 SpeedLabel(symbol.ExternalAmplifiers),
-				 VerticalPositionLabel(fields, symbol.ExternalAmplifiers)})
-		{
-			if (label)
+			if (context.DetailedLabels && symbol.ExternalAmplifiers.UniqueDesignation)
 			{
-				DrawTextAmplifier(drawing, *label, {labelStartX, labelY}, fontSize, affiliationColor, bounds);
+				DrawTextAmplifier(drawing, *symbol.ExternalAmplifiers.UniqueDesignation, {labelStartX, labelY}, fontSize, affiliationColor, bounds);
 				labelY += fontSize + 2.0f * scale;
+			}
+			if (symbol.ExternalAmplifiers.NameOrType)
+			{
+				DrawTextAmplifier(drawing, *symbol.ExternalAmplifiers.NameOrType, {labelStartX, labelY}, fontSize, affiliationColor, bounds);
+				labelY += fontSize + 2.0f * scale;
+			}
+			if (context.DetailedLabels && symbol.ExternalAmplifiers.AdditionalInformation)
+			{
+				DrawTextAmplifier(drawing, *symbol.ExternalAmplifiers.AdditionalInformation, {labelStartX, labelY}, fontSize, affiliationColor, bounds);
+				labelY += fontSize + 2.0f * scale;
+			}
+			for (const auto& label : {
+					 HeadingLabel(symbol.ExternalAmplifiers),
+					 SpeedLabel(symbol.ExternalAmplifiers),
+					 VerticalPositionLabel(fields, symbol.ExternalAmplifiers)})
+			{
+				if (context.DetailedLabels && label)
+				{
+					DrawTextAmplifier(drawing, *label, {labelStartX, labelY}, fontSize, affiliationColor, bounds);
+					labelY += fontSize + 2.0f * scale;
+				}
 			}
 		}
 
@@ -1119,6 +1144,6 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			return {{context.Anchor, context.Anchor}, false};
 		}
 		const Api::ScreenRectangle screenBounds = bounds.ToScreenRectangle();
-		return {screenBounds, IsInsideViewport(screenBounds, context.Viewport)};
+		return {screenBounds, IsInsideViewport(screenBounds, context.Viewport), symbolBounds};
 	}
 }
