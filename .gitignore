@@ -1,0 +1,6 @@
+/o/
+/vcpkg_installed/
+/Build.Local.cmake
+/CMakeUserPresets.json
+*.user
+.idea/
