@@ -232,6 +232,10 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		};
 		const std::array entityCases{EntityCase{Api::SymbolSet::Air, 11, 1, 0, 0},
 									 EntityCase{Api::SymbolSet::Air, 11, 2, 0, 0},
+									 EntityCase{Api::SymbolSet::Air, 11, 1, 0, 4},
+									 EntityCase{Api::SymbolSet::Air, 11, 1, 0, 12},
+									 EntityCase{Api::SymbolSet::Air, 11, 1, 0, 16},
+									 EntityCase{Api::SymbolSet::SeaSurface, 12, 2, 2, 0},
 									 EntityCase{Api::SymbolSet::AirMissile, 11, 0, 0, 6},
 									 EntityCase{Api::SymbolSet::AirMissile, 11, 0, 0, 7},
 									 EntityCase{Api::SymbolSet::SeaSurface, 12, 1, 0, 0},

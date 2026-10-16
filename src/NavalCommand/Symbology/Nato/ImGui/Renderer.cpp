@@ -518,6 +518,33 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			}
 		}
 
+		std::string_view AircraftRoleLabel(std::uint8_t modifier)
+		{
+			switch (modifier)
+			{
+			case 1:
+				return "A";
+			case 2:
+				return "ASW";
+			case 3:
+				return "C";
+			case 4:
+				return "F";
+			case 5:
+				return "K";
+			case 12:
+				return "AEW";
+			case 16:
+				return "J";
+			case 17:
+				return "P";
+			case 18:
+				return "R";
+			default:
+				return {};
+			}
+		}
+
 		bool IsSupportedEntity(const Api::SidcFields& fields)
 		{
 			if (fields.Modifier2 != 0 && !(fields.SymbolSetValue == Api::SymbolSet::AirMissile && fields.Modifier1 == 1 && fields.Modifier2 == 1))
@@ -540,7 +567,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			case Api::SymbolSet::Air:
 				return (fields.Entity == 0 && fields.EntityType == 0 && fields.EntitySubtype == 0 && fields.Modifier1 == 0) ||
 					   (fields.Entity == 11 && (fields.EntityType == 1 || fields.EntityType == 2) && fields.EntitySubtype == 0 &&
-						(fields.Modifier1 == 0 || (fields.EntityType == 1 && fields.Modifier1 == 4)));
+						(fields.Modifier1 == 0 || !AircraftRoleLabel(fields.Modifier1).empty()));
 			case Api::SymbolSet::AirMissile:
 				return fields.Entity == 11 && fields.EntityType == 0 && fields.EntitySubtype == 0 &&
 					   (fields.Modifier1 == 0 || fields.Modifier1 == 1 || fields.Modifier1 == 6 || fields.Modifier1 == 7);
@@ -553,7 +580,8 @@ namespace NavalCommand::Symbology::Nato::ImGui
 				return (fields.Entity == 0 && fields.EntityType == 0 && fields.EntitySubtype == 0 && fields.Modifier1 == 0) ||
 					   (fields.Entity == 12 && fields.EntityType == 1 && fields.EntitySubtype == 0 && fields.Modifier1 == 0) ||
 					   (fields.Entity == 12 && fields.EntityType == 2 &&
-						(fields.EntitySubtype == 0 || fields.EntitySubtype == 3 || fields.EntitySubtype == 4 || fields.EntitySubtype == 5) && fields.Modifier1 == 0) ||
+						(fields.EntitySubtype == 0 || fields.EntitySubtype == 2 || fields.EntitySubtype == 3 || fields.EntitySubtype == 4 || fields.EntitySubtype == 5) &&
+						fields.Modifier1 == 0) ||
 					   (fields.Entity == 12 && (fields.EntityType == 3 || fields.EntityType == 5) && fields.EntitySubtype == 0 && fields.Modifier1 == 0) ||
 					   ((fields.Entity == 13 || fields.Entity == 14) && fields.EntityType == 1 && fields.EntitySubtype == 0 && fields.Modifier1 == 0);
 			case Api::SymbolSet::SeaSubsurface:
@@ -615,13 +643,15 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		void DrawEntityIcon(DrawingSink& drawing, const Api::SidcFields& fields, ImVec2 center, float scale, ImU32 color, BoundsBuilder& bounds)
 		{
 			const float thickness = BASE_LINE_THICKNESS * scale;
+			const bool aircraft = fields.SymbolSetValue == Api::SymbolSet::Air && fields.Entity == 11;
+			const ImVec2 iconCenter{center.x, center.y + (aircraft && fields.Modifier1 != 0 ? 4.5f * scale : 0.0f)};
 			const auto point = [&](float x, float y)
 			{
 				const bool capitalSurfaceIcon =
 					fields.SymbolSetValue == Api::SymbolSet::SeaSurface && fields.Entity == 12 && (fields.EntityType == 1 || (fields.EntityType == 2 && fields.EntitySubtype == 0));
 				const bool submarineIcon = fields.SymbolSetValue == Api::SymbolSet::SeaSubsurface && fields.Entity == 11;
-				const float geometryScale = capitalSurfaceIcon ? 2.8f : submarineIcon ? 1.8f : 1.25f;
-				return StandardPoint(center, scale * geometryScale, x, y);
+				const float geometryScale = aircraft ? 2.0f : capitalSurfaceIcon ? 2.8f : submarineIcon ? 1.8f : 1.25f;
+				return StandardPoint(iconCenter, scale * geometryScale, x, y);
 			};
 
 			if (fields.SymbolSetValue == Api::SymbolSet::Air && fields.Entity == 11 && fields.EntityType == 1)
@@ -640,9 +670,9 @@ namespace NavalCommand::Symbology::Nato::ImGui
 				drawing.PathFillConcave(color);
 				buildPath();
 				drawing.PathStroke(color, ImDrawFlags_Closed, thickness);
-				if (fields.Modifier1 == 4)
+				if (const auto label = AircraftRoleLabel(fields.Modifier1); !label.empty())
 				{
-					DrawCenteredEntityText(drawing, "F", point(100, 55), scale, color, bounds);
+					DrawCenteredEntityText(drawing, label, {center.x, center.y - 7.0f * scale}, scale * 0.8f, color, bounds);
 				}
 				bounds.Add(point(55, 88), thickness);
 				bounds.Add(point(145, 112), thickness);
@@ -650,7 +680,14 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			}
 			if (fields.SymbolSetValue == Api::SymbolSet::Air && fields.Entity == 11 && fields.EntityType == 2)
 			{
-				DrawStandardPath(drawing, {point(60, 85), point(100, 100), point(140, 85), point(140, 115), point(100, 100), point(60, 115)}, color, thickness, true, true, bounds);
+				// Triangulate the two lobes independently: the combined outline
+				// touches itself at the rotor hub and is not a simple polygon.
+				DrawStandardPath(drawing, {point(60, 85), point(100, 100), point(60, 115)}, color, thickness, true, true, bounds);
+				DrawStandardPath(drawing, {point(140, 85), point(140, 115), point(100, 100)}, color, thickness, true, true, bounds);
+				if (const auto label = AircraftRoleLabel(fields.Modifier1); !label.empty())
+				{
+					DrawCenteredEntityText(drawing, label, {center.x, center.y - 7.0f * scale}, scale * 0.8f, color, bounds);
+				}
 				return;
 			}
 			if (fields.SymbolSetValue == Api::SymbolSet::AirMissile && fields.Entity == 11)
@@ -687,7 +724,8 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			}
 			if (fields.SymbolSetValue == Api::SymbolSet::SeaSurface && fields.Entity == 12 && fields.EntityType == 1)
 			{
-				DrawStandardPath(drawing, {point(80, 100), point(100, 120), point(120, 100), point(100, 100), point(100, 80), point(80, 80)}, color, thickness, true, true, bounds);
+				DrawStandardPath(
+					drawing, {point(80, 100), point(100, 120), point(120, 100), point(100, 100), point(100, 80), point(80, 80)}, color, thickness, true, false, bounds);
 				return;
 			}
 			if (fields.SymbolSetValue == Api::SymbolSet::SeaSurface && fields.Entity == 12 && fields.EntityType == 2)
@@ -722,7 +760,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 				}
 				else
 				{
-					const std::string_view label = fields.EntitySubtype == 3 ? "DD" : fields.EntitySubtype == 4 ? "FF" : "FS";
+					const std::string_view label = fields.EntitySubtype == 2 ? "CC" : fields.EntitySubtype == 3 ? "DD" : fields.EntitySubtype == 4 ? "FF" : "FS";
 					DrawCenteredEntityText(drawing, label, center, scale, color, bounds);
 				}
 				return;
@@ -772,7 +810,14 @@ namespace NavalCommand::Symbology::Nato::ImGui
 				if (fields.Modifier1 == 8 || fields.Modifier1 == 9 || fields.Modifier1 == 10)
 				{
 					const std::string_view mission = fields.Modifier1 == 8 ? "A" : fields.Modifier1 == 9 ? "B" : "G";
-					DrawCenteredEntityText(drawing, mission, point(100, 71), scale, color, bounds);
+					const float textScale = scale * 0.8f;
+					const float textHeight =
+						::ImGui::GetFont()
+							->CalcTextSizeA(
+								std::max(14.0f, ::ImGui::GetFontSize()) * textScale, std::numeric_limits<float>::max(), 0.0f, mission.data(), mission.data() + mission.size())
+							.y;
+					const ImVec2 modifierCenter{center.x, point(100, 85).y - 2.0f * scale - textHeight * 0.5f};
+					DrawCenteredEntityText(drawing, mission, modifierCenter, textScale, color, bounds);
 				}
 				return;
 			}
