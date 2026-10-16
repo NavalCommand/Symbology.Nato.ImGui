@@ -98,7 +98,25 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			{
 				if (m_Drawing && Enabled)
 				{
-					m_Drawing->AddConcavePolyFilled(points, count, Ink(color));
+					// ImGui's triangulation and AA fringe require clockwise winding
+					// in screen coordinates, including vertically mirrored frames.
+					double signedArea = 0.0;
+					for (int index = 0; index < count; ++index)
+					{
+						const auto& first = points[index];
+						const auto& second = points[(index + 1) % count];
+						signedArea += static_cast<double>(first.x) * second.y - static_cast<double>(second.x) * first.y;
+					}
+					if (signedArea < 0.0)
+					{
+						std::vector<ImVec2> reversed(points, points + count);
+						std::ranges::reverse(reversed);
+						m_Drawing->AddConcavePolyFilled(reversed.data(), count, Ink(color));
+					}
+					else
+					{
+						m_Drawing->AddConcavePolyFilled(points, count, Ink(color));
+					}
 				}
 			}
 
@@ -671,20 +689,24 @@ namespace NavalCommand::Symbology::Nato::ImGui
 
 			if (fields.SymbolSetValue == Api::SymbolSet::Air && fields.Entity == 11 && fields.EntityType == 1)
 			{
-				const auto buildPath = [&]()
+				const auto drawWing = [&](float direction)
 				{
-					drawing.PathClear();
-					drawing.PathLineTo(point(100, 100));
-					drawing.PathLineTo(point(130, 88));
-					drawing.PathBezierCubicCurveTo(point(145, 88), point(145, 112), point(130, 112));
-					drawing.PathLineTo(point(100, 100));
-					drawing.PathLineTo(point(70, 112));
-					drawing.PathBezierCubicCurveTo(point(55, 112), point(55, 88), point(70, 88));
+					const auto buildPath = [&]()
+					{
+						drawing.PathClear();
+						drawing.PathLineTo(point(100, 100));
+						drawing.PathLineTo(point(100 + 30 * direction, 100 - 12 * direction));
+						drawing.PathBezierCubicCurveTo(point(100 + 45 * direction, 100 - 12 * direction),
+													   point(100 + 45 * direction, 100 + 12 * direction),
+													   point(100 + 30 * direction, 100 + 12 * direction));
+					};
+					buildPath();
+					drawing.PathFillConcave(color);
+					buildPath();
+					drawing.PathStroke(color, ImDrawFlags_Closed, thickness);
 				};
-				buildPath();
-				drawing.PathFillConcave(color);
-				buildPath();
-				drawing.PathStroke(color, ImDrawFlags_Closed, thickness);
+				drawWing(1.0f);
+				drawWing(-1.0f);
 				if (const auto label = AircraftRoleLabel(fields.Modifier1); !label.empty())
 				{
 					DrawCenteredEntityText(drawing, label, {center.x, center.y - 7.0f * scale}, scale * 0.8f, color, bounds);

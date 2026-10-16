@@ -130,6 +130,44 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		EXPECT_FALSE(renderer.Render({*invalidModifier, {}, std::nullopt}, MakeContext()).WasDrawn);
 	}
 
+	TEST(RendererTest, UnknownSubsurfaceFillFringeMirrorsAirWithoutProtrudingAtJoins)
+	{
+		ImGuiFrame frame;
+		Renderer renderer;
+		auto context = MakeContext();
+		context.ShowLabels = false;
+		auto& drawing = *::ImGui::GetWindowDrawList();
+		const auto fillColor = IM_COL32(255, 255, 128, 255);
+		const auto fillVertices = [&](Api::SymbolSet set)
+		{
+			const int start = drawing.VtxBuffer.Size;
+			renderer.Render(MakeSymbol(set, Api::StandardIdentity::Unknown), context);
+			std::vector<ImVec2> points;
+			for (int index = start; index < drawing.VtxBuffer.Size; ++index)
+			{
+				if (drawing.VtxBuffer[index].col == fillColor)
+				{
+					points.push_back(drawing.VtxBuffer[index].pos);
+				}
+			}
+			return points;
+		};
+		const auto air = fillVertices(Api::SymbolSet::Air);
+		const auto subsurface = fillVertices(Api::SymbolSet::SeaSubsurface);
+		ASSERT_FALSE(air.empty());
+		ASSERT_EQ(air.size(), subsurface.size());
+		for (const auto point : air)
+		{
+			const auto reflectedY = 2.0 * context.VisualAnchor.Y - point.y;
+			bool matched = false;
+			for (const auto other : subsurface)
+			{
+				matched = matched || (std::abs(point.x - other.x) < 0.001 && std::abs(reflectedY - other.y) < 0.001);
+			}
+			EXPECT_TRUE(matched) << point.x << ", " << reflectedY;
+		}
+	}
+
 	TEST(RendererTest, UsesStandardAffiliationColoursAndEntityGeometry)
 	{
 		ImGuiFrame frame;
