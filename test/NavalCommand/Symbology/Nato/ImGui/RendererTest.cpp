@@ -98,6 +98,38 @@ namespace NavalCommand::Symbology::Nato::ImGui
 		}
 	}
 
+	TEST(RendererTest, UnknownOpenDomainFramesHaveRoomForMissionSectors)
+	{
+		ImGuiFrame frame;
+		Renderer renderer;
+		auto context = MakeContext();
+		context.ShowLabels = false;
+		const auto surface = renderer.Measure(MakeSymbol(Api::SymbolSet::SeaSurface, Api::StandardIdentity::Unknown), context);
+		const auto air = renderer.Measure(MakeSymbol(Api::SymbolSet::Air, Api::StandardIdentity::Unknown), context);
+		const auto subsurface = renderer.Measure(MakeSymbol(Api::SymbolSet::SeaSubsurface, Api::StandardIdentity::Unknown), context);
+		EXPECT_GT(air.SymbolBounds.Maximum.Y - air.SymbolBounds.Minimum.Y, surface.SymbolBounds.Maximum.Y - surface.SymbolBounds.Minimum.Y);
+		EXPECT_NEAR(air.SymbolBounds.Minimum.X, subsurface.SymbolBounds.Minimum.X, 0.001);
+		EXPECT_NEAR(air.SymbolBounds.Maximum.X, subsurface.SymbolBounds.Maximum.X, 0.001);
+		EXPECT_NEAR(air.SymbolBounds.Minimum.Y - context.VisualAnchor.Y, context.VisualAnchor.Y - subsurface.SymbolBounds.Maximum.Y, 0.001);
+		EXPECT_NEAR(air.SymbolBounds.Maximum.Y - context.VisualAnchor.Y, context.VisualAnchor.Y - subsurface.SymbolBounds.Minimum.Y, 0.001);
+	}
+
+	TEST(RendererTest, GuidedMissileCruiserCommonModifierIsSupported)
+	{
+		ImGuiFrame frame;
+		Renderer renderer;
+		auto fields = MakeSymbol(Api::SymbolSet::SeaSurface, Api::StandardIdentity::Friendly, 12, 2, 2).Identification.Fields();
+		fields.Modifier1 = 33;
+		fields.ThirdTen[0] = '1';
+		const auto identification = Api::Sidc::Create(fields);
+		ASSERT_TRUE(identification);
+		EXPECT_TRUE(renderer.Render({*identification, {}, std::nullopt}, MakeContext()).WasDrawn);
+		fields.ThirdTen[0] = '0';
+		const auto invalidModifier = Api::Sidc::Create(fields);
+		ASSERT_TRUE(invalidModifier);
+		EXPECT_FALSE(renderer.Render({*invalidModifier, {}, std::nullopt}, MakeContext()).WasDrawn);
+	}
+
 	TEST(RendererTest, UsesStandardAffiliationColoursAndEntityGeometry)
 	{
 		ImGuiFrame frame;

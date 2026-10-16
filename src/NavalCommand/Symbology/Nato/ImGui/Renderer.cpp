@@ -368,31 +368,37 @@ namespace NavalCommand::Symbology::Nato::ImGui
 
 			if (group == IdentityGroup::Unknown)
 			{
-				// All lobes use the same geometry and radius; open frames omit one lobe.
+				if (dimension == FrameDimension::AirOrSpace || dimension == FrameDimension::SeaSubsurface)
+				{
+					// Open domain frames have elongated side lobes for the icon and
+					// mission sectors. Subsurface is the vertical mirror of air.
+					const auto domainPoint = [&](float horizontal, float vertical)
+					{
+						return point(horizontal, dimension == FrameDimension::SeaSubsurface ? -vertical : vertical);
+					};
+					const ImVec2 leftBottom = domainPoint(-0.45f, 0.9f);
+					const ImVec2 leftShoulder = domainPoint(-0.45f, -0.6f);
+					const ImVec2 rightShoulder = domainPoint(0.45f, -0.6f);
+					const ImVec2 rightBottom = domainPoint(0.45f, 0.9f);
+					std::vector<ImVec2> points{leftBottom};
+					AppendCubic(points, leftBottom, domainPoint(-1.25f, 0.9f), domainPoint(-1.25f, -0.6f), leftShoulder, 16);
+					AppendCubic(points, leftShoulder, domainPoint(-0.45f, -1.4f), domainPoint(0.45f, -1.4f), rightShoulder, 16);
+					AppendCubic(points, rightShoulder, domainPoint(1.25f, -0.6f), domainPoint(1.25f, 0.9f), rightBottom, 16);
+					return points;
+				}
+				// Closed surface/ground frames have four equal lobes. The closing
+				// endpoint must not be repeated: ImGui closes the stroke itself.
 				std::vector<ImVec2> points;
 				const ImVec2 topLeft = point(-0.4f, -0.4f);
 				const ImVec2 topRight = point(0.4f, -0.4f);
 				const ImVec2 bottomRight = point(0.4f, 0.4f);
 				const ImVec2 bottomLeft = point(-0.4f, 0.4f);
-				if (dimension == FrameDimension::SeaSubsurface)
-				{
-					points.push_back(topRight);
-				}
-				else
-				{
-					points.push_back(bottomLeft);
-					AppendCubic(points, bottomLeft, point(-1.2f, 0.4f), point(-1.2f, -0.4f), topLeft, 8);
-					AppendCubic(points, topLeft, point(-0.4f, -1.2f), point(0.4f, -1.2f), topRight, 8);
-				}
+				points.push_back(bottomLeft);
+				AppendCubic(points, bottomLeft, point(-1.2f, 0.4f), point(-1.2f, -0.4f), topLeft, 8);
+				AppendCubic(points, topLeft, point(-0.4f, -1.2f), point(0.4f, -1.2f), topRight, 8);
 				AppendCubic(points, topRight, point(1.2f, -0.4f), point(1.2f, 0.4f), bottomRight, 8);
-				if (dimension != FrameDimension::AirOrSpace)
-				{
-					AppendCubic(points, bottomRight, point(0.4f, 1.2f), point(-0.4f, 1.2f), bottomLeft, 8);
-				}
-				if (dimension == FrameDimension::SeaSubsurface)
-				{
-					AppendCubic(points, bottomLeft, point(-1.2f, 0.4f), point(-1.2f, -0.4f), topLeft, 8);
-				}
+				AppendCubic(points, bottomRight, point(0.4f, 1.2f), point(-0.4f, 1.2f), bottomLeft, 8);
+				points.pop_back();
 				return points;
 			}
 
@@ -545,8 +551,17 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			}
 		}
 
+		bool HasGuidedMissileRole(const Api::SidcFields& fields)
+		{
+			return fields.SymbolSetValue == Api::SymbolSet::SeaSurface && fields.ThirdTen[0] == '1' && fields.Modifier1 == 33;
+		}
+
 		bool IsSupportedEntity(const Api::SidcFields& fields)
 		{
+			if (fields.ThirdTen[1] != '0' || (fields.ThirdTen[0] != '0' && !HasGuidedMissileRole(fields)))
+			{
+				return false;
+			}
 			if (fields.Modifier2 != 0 && !(fields.SymbolSetValue == Api::SymbolSet::AirMissile && fields.Modifier1 == 1 && fields.Modifier2 == 1))
 			{
 				return false;
@@ -581,7 +596,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 					   (fields.Entity == 12 && fields.EntityType == 1 && fields.EntitySubtype == 0 && fields.Modifier1 == 0) ||
 					   (fields.Entity == 12 && fields.EntityType == 2 &&
 						(fields.EntitySubtype == 0 || fields.EntitySubtype == 2 || fields.EntitySubtype == 3 || fields.EntitySubtype == 4 || fields.EntitySubtype == 5) &&
-						fields.Modifier1 == 0) ||
+						(fields.Modifier1 == 0 || (fields.EntitySubtype == 2 && HasGuidedMissileRole(fields)))) ||
 					   (fields.Entity == 12 && (fields.EntityType == 3 || fields.EntityType == 5) && fields.EntitySubtype == 0 && fields.Modifier1 == 0) ||
 					   ((fields.Entity == 13 || fields.Entity == 14) && fields.EntityType == 1 && fields.EntitySubtype == 0 && fields.Modifier1 == 0);
 			case Api::SymbolSet::SeaSubsurface:
@@ -725,7 +740,7 @@ namespace NavalCommand::Symbology::Nato::ImGui
 			if (fields.SymbolSetValue == Api::SymbolSet::SeaSurface && fields.Entity == 12 && fields.EntityType == 1)
 			{
 				DrawStandardPath(
-					drawing, {point(80, 100), point(100, 120), point(120, 100), point(100, 100), point(100, 80), point(80, 80)}, color, thickness, true, false, bounds);
+					drawing, {point(80, 95), point(100, 120), point(120, 95), point(94, 95), point(94, 85), point(84, 85), point(84, 95)}, color, thickness, true, true, bounds);
 				return;
 			}
 			if (fields.SymbolSetValue == Api::SymbolSet::SeaSurface && fields.Entity == 12 && fields.EntityType == 2)
@@ -760,7 +775,10 @@ namespace NavalCommand::Symbology::Nato::ImGui
 				}
 				else
 				{
-					const std::string_view label = fields.EntitySubtype == 2 ? "CC" : fields.EntitySubtype == 3 ? "DD" : fields.EntitySubtype == 4 ? "FF" : "FS";
+					const std::string_view label = fields.EntitySubtype == 2   ? (HasGuidedMissileRole(fields) ? "CG" : "CC")
+												   : fields.EntitySubtype == 3 ? "DD"
+												   : fields.EntitySubtype == 4 ? "FF"
+																			   : "FS";
 					DrawCenteredEntityText(drawing, label, center, scale, color, bounds);
 				}
 				return;
